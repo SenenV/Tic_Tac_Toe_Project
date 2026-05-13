@@ -28,12 +28,14 @@ int  game_active;
 
 struct mosquitto *mosq;
 
+/* resets board back to empty state */
 void reset_board() {
     for (int i = 0; i < 9; i++) board[i] = EMPTY;
     current_player = PLAYER_X;
     game_active = 0;
 }
 
+/* sends current board to broker */
 void publish_board() {
     char state[10];
 
@@ -46,12 +48,14 @@ void publish_board() {
     printf("Board: [%s]\n", state);
 }
 
+/* publish status messages (winner/draw/turn) */
 void publish_status(const char *msg) {
     mosquitto_publish(mosq, NULL, TOP_STATUS, strlen(msg), msg, 0, false);
 
     printf("Status: %s\n", msg);
 }
 
+/* prints board to terminal (debugging)*/
 void print_board() {
     printf("\n");
 
@@ -64,6 +68,7 @@ void print_board() {
     printf("\n");
 }
 
+/* checks for winning combinations */
 int check_winner(char sym) {
     if (board[0]==sym && board[1]==sym && board[2]==sym) return 1;
     if (board[3]==sym && board[4]==sym && board[5]==sym) return 1;
@@ -79,6 +84,7 @@ int check_winner(char sym) {
     return 0;
 }
 
+/* checks to see if board is full*/
 int check_draw() {
     for (int i = 0; i < 9; i++) {
         if (board[i] == EMPTY) return 0;
@@ -87,18 +93,22 @@ int check_draw() {
     return 1;
 }
 
+/* notifies the turn of the players */
 void notify_turn() {
     publish_status("your_turn");
 
     printf("It is %c's turn\n", current_player);
 }
 
+/* handle player moves */
 void handle_move(const char *msg) {
+    
+    /* ignore moves once game ends */
     if (!game_active) {
         printf("Move received but no game active, ignoring.\n");
         return;
     }
-
+    /*  validates move format (X:5) */
     if (strlen(msg) < 3 || msg[1] != ':') {
         printf("Invalid move format: %s\n", msg);
         return;
@@ -107,6 +117,7 @@ void handle_move(const char *msg) {
     char sym = msg[0];
     int  pos = msg[2] - '0';
 
+    /* makes sure its the correct players turn */
     if (sym != current_player) {
         publish_status("invalid_not_your_turn");
 
@@ -116,6 +127,7 @@ void handle_move(const char *msg) {
         return;
     }
 
+    /* valid board range */
     if (pos < 1 || pos > 9) {
         publish_status("invalid_position_taken");
 
@@ -126,6 +138,7 @@ void handle_move(const char *msg) {
 
     int idx = pos - 1;
 
+    /* prevents overwriting existing moves */
     if (board[idx] != EMPTY) {
         publish_status("invalid_position_taken");
 
@@ -140,6 +153,7 @@ void handle_move(const char *msg) {
 
     publish_board();
 
+    /* if current players move won */
     if (check_winner(sym)) {
         char result[16];
 
@@ -154,6 +168,7 @@ void handle_move(const char *msg) {
         return;
     }
 
+    /* if tie */
     if (check_draw()) {
         publish_status("draw");
 
@@ -171,7 +186,10 @@ void handle_move(const char *msg) {
     notify_turn();
 }
 
+/* start, restart commands */
 void handle_control(const char *msg) {
+
+    /* single player */
     if (strcmp(msg, "start_1p") == 0) {
 
         reset_board();
@@ -187,6 +205,7 @@ void handle_control(const char *msg) {
 
         notify_turn();
 
+      /* two player */
     } else if (strcmp(msg, "start_2p") == 0) {
 
         reset_board();
@@ -202,6 +221,7 @@ void handle_control(const char *msg) {
 
         notify_turn();
 
+      /* quit command */
     } else if (strcmp(msg, "quit") == 0) {
 
         printf("Quit received, resetting.\n");
@@ -216,6 +236,7 @@ void handle_control(const char *msg) {
     }
 }
 
+/* starts when mqtt message is received */
 void on_message(struct mosquitto *m,
                 void *userdata,
                 const struct mosquitto_message *message) {
@@ -244,6 +265,7 @@ void on_message(struct mosquitto *m,
     }
 }
 
+/* runs when connecting to broker */
 void on_connect(struct mosquitto *m,
                 void *userdata,
                 int result) {
@@ -263,6 +285,7 @@ void on_connect(struct mosquitto *m,
     }
 }
 
+/* main */
 int main() {
     printf("Tic-Tac-Toe Game Server starting...\n");
 
