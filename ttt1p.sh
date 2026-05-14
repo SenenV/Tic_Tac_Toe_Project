@@ -1,4 +1,4 @@
-#!/bin/bash
+\#!/bin/bash
 
 
 MQTT_HOST="localhost"
@@ -34,10 +34,39 @@ get_available() {
   echo "${available[@]}"
 }
 
+#checks for winner
+check_winner() {
+  local sym=$1
+  local wins=("0 1 2" "3 4 5" "6 7 8" "0 3 6" "1 4 7" "2 5 8" "0 4 8" "2 4 6")
+  for combo in "${wins[@]}"; do
+    read -r a b c <<< "$combo"
+    if [ "${BOARD[$a]}" = "$sym" ] && [ "${BOARD[$b]}" = "$sym" ] && [ "${BOARD[$c]}" = "$sym" ]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 # picks a position to play
 pick_move() {
   local available
   read -r -a available <<< "$(get_available)"
+
+  # try to win
+  for pos in "${available[@]}"; do
+    local idx=$((pos - 1))
+    BOARD[$idx]="O"
+    if check_winner "O"; then BOARD[$idx]=" "; echo "$pos"; return; fi
+    BOARD[$idx]=" "
+  done
+
+  # block moves
+  for pos in "${available[@]}"; do
+    local idx=$((pos - 1))
+    BOARD[$idx]="X"
+    if check_winner "X"; then BOARD[$idx]=" "; echo "$pos"; return; fi
+    BOARD[$idx]=" "
+  done
 
   # just picks a random available spot
   local rand_idx=$(( RANDOM % ${#available[@]} ))
